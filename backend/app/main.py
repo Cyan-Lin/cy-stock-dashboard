@@ -1,9 +1,20 @@
 import os
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI(title="cy-stock-dashboard API")
+from .db.migrate import run_migrations
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    run_migrations()
+    yield
+
+
+app = FastAPI(title="cy-stock-dashboard API", lifespan=lifespan)
 
 _cors_origins = os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:5173").split(",")
 
