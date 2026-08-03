@@ -25,3 +25,11 @@ postgres_data/
 .vscode/
 .idea/
 *.swp
+
+# Teaching workspace (local only)
+MISSION.md
+NOTES.md
+assets/
+lessons/
+reference/
+learning-records/

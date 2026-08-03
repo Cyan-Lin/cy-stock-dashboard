@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lesson 01 — Docker 是什麼？</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/lesson.css" />
+</head>
+<body>
+
+<nav class="lesson-nav">
+  Docker 學習路徑 &rsaquo; <strong>Lesson 01</strong>
+</nav>
+
+<h1>Docker 是什麼？</h1>
+<p class="lesson-meta">Lesson 01 &middot; 閱讀時間約 8 分鐘 &middot; 對應任務：T01 Docker Compose 骨架</p>
+
+<!-- ── 為什麼你需要它 ── -->
+<h2>為什麼需要 Docker？</h2>
+
+<p>你的 cy-stock-dashboard 需要三個服務同時跑：</p>
+
+<div class="diagram">
+  ┌──────────────┐   ┌──────────────┐   ┌──────────────┐
+  │   Frontend   │   │   Backend    │   │  PostgreSQL  │
+  │ React + Vite │──▶│   FastAPI    │──▶│   Database   │
+  │  port 5173   │   │  port 8000   │   │  port 5432   │
+  └──────────────┘   └──────────────┘   └──────────────┘</div>
+
+<p>
+  沒有 Docker，你得在自己電腦上手動裝 Node.js、Python、PostgreSQL，
+  設定版本，確保每台電腦的環境完全一致。Docker 把這些依賴全部
+  <strong>打包進容器</strong>，讓三個服務用一條指令啟動：
+</p>
+
+<pre><code>docker compose up --build</code></pre>
+
+<!-- ── 三個核心概念 ── -->
+<h2>三個你必須記住的概念</h2>
+
+<div class="card accent">
+  <h3>1. Image（映像檔）</h3>
+  <p>
+    Image 是<strong>食譜</strong>。它描述「這個服務需要什麼環境、安裝什麼套件、
+    執行什麼指令」。Image 本身不會跑，它是唯讀的模板。
+  </p>
+  <p>你在 <code>Dockerfile</code> 裡定義如何建立一個 image。</p>
+</div>
+
+<div class="card accent">
+  <h3>2. Container（容器）</h3>
+  <p>
+    Container 是<strong>用食譜做出來的那道菜</strong>。它是 image 的執行實例，
+    是真正在跑的程序。同一個 image 可以同時啟動多個 container。
+  </p>
+  <p>Container 是隔離的：它有自己的檔案系統、網路、程序空間。</p>
+</div>
+
+<div class="card accent">
+  <h3>3. Volume（掛載卷）</h3>
+  <p>
+    Container 裡的資料預設在 container 刪除後消失。Volume 是
+    <strong>掛在 container 外面的硬碟</strong>，讓資料持久保存。
+  </p>
+  <p>
+    你的 <code>docker-compose.yml</code> 裡有一行 <code>postgres_data:/var/lib/postgresql/data</code>，
+    這就是把 PostgreSQL 的資料庫檔案存到 volume，重啟不會遺失。
+  </p>
+</div>
+
+<!-- ── Dockerfile 逐行解析 ── -->
+<h2>看懂你專案的 Dockerfile</h2>
+
+<p>以 backend 的 Dockerfile 為例：</p>
+
+<pre><code>FROM python:3.12-slim          <span class="cm"># 以官方 Python 3.12 image 為基底</span>
+
+WORKDIR /app                   <span class="cm"># 在容器裡建立 /app 目錄，後續指令都在這執行</span>
+
+COPY requirements.txt .        <span class="cm"># 先只複製 requirements.txt（利用快取加速）</span>
+RUN pip install --no-cache-dir -r requirements.txt  <span class="cm"># 安裝 Python 套件</span>
+
+COPY . .                       <span class="cm"># 再複製所有程式碼進容器</span>
+
+CMD ["uvicorn", "app.main:app", <span class="cm"># 容器啟動時執行的預設指令</span>
+     "--host", "0.0.0.0", "--port", "8000"]</code></pre>
+
+<div class="callout tip">
+  <span class="callout-icon">💡</span>
+  <div>
+    <strong>為什麼先 COPY requirements.txt，再 COPY . .？</strong><br/>
+    Docker 會快取每一層（layer）。如果程式碼有改動但 requirements.txt 沒變，
+    Docker 就跳過重新安裝套件的步驟，大幅加速 rebuild。
+    這是最常見的 Dockerfile 最佳化技巧。
+  </div>
+</div>
+
+<!-- ── docker-compose.yml 簡介 ── -->
+<h2>docker-compose.yml 的角色</h2>
+
+<p>
+  Dockerfile 定義「單一服務怎麼建立」，而 <code>docker-compose.yml</code>
+  定義「多個服務如何一起跑」：誰依賴誰、用哪個 port、共用哪個 volume。
+</p>
+
+<pre><code>services:
+  db:                          <span class="cm"># 服務名稱</span>
+    image: postgres:16-alpine  <span class="cm"># 直接用公開 image，不需要 Dockerfile</span>
+    healthcheck:               <span class="cm"># 告訴 Docker 怎麼確認這個服務「健康了」</span>
+      test: ["CMD-SHELL", "pg_isready ..."]
+
+  backend:
+    build:                     <span class="cm"># 從 ./backend/Dockerfile 建立 image</span>
+      context: ./backend
+    depends_on:
+      db:
+        condition: service_healthy  <span class="cm"># backend 等 db 健康後才啟動</span></code></pre>
+
+<div class="callout note">
+  <span class="callout-icon">📌</span>
+  <div>
+    你選取了 <code>pg_isready</code> 這一行。這是 PostgreSQL 內建指令，
+    用來檢查資料庫是否準備好接受連線。Docker 的 healthcheck 每隔幾秒呼叫它一次，
+    直到它回傳成功，才讓 backend 啟動。
+  </div>
+</div>
+
+<!-- ── Quiz ── -->
+<h2>快速確認</h2>
+
+<div class="quiz" data-correct="1">
+  <p class="quiz-question">Q1：你修改了 <code>app/main.py</code>，需要重建 image。以下哪個說法正確？</p>
+  <div class="quiz-options">
+    <button data-explain="— requirements.txt 沒變，套件安裝層會從快取讀取，只有程式碼層會重建。">重建時所有層都要重新執行，包含 pip install</button>
+    <button data-explain="— 因為 requirements.txt 沒變，Docker 從快取跳過 pip install，只重建之後的層。">重建時 pip install 層從快取讀取，只有 COPY . . 之後重建</button>
+    <button data-explain="— image 是可以重建的，這不是 volume 的功能。">要先刪除 volume，才能重建 image</button>
+    <button data-explain="— Image 是模板，Container 才是執行實例。">image 是執行中的程序，所以要先 stop 才能修改</button>
+  </div>
+  <div class="quiz-feedback"></div>
+</div>
+
+<div class="quiz" data-correct="2">
+  <p class="quiz-question">Q2：<code>postgres_data</code> volume 的用途是？</p>
+  <div class="quiz-options">
+    <button data-explain="— port 對應是 ports 設定的功能。">把容器的 port 5432 對應到主機</button>
+    <button data-explain="— 快取是 layer 機制的功能，不是 volume。">讓 Docker build 更快，快取 pip 套件</button>
+    <button data-explain="— 正確。Volume 讓容器刪除後資料仍然存在。">讓 PostgreSQL 的資料在容器刪除後依然保留</button>
+    <button data-explain="— 服務之間通訊走的是 Docker 內部網路，不需要 volume。">讓 backend 容器可以存取 db 容器的網路</button>
+  </div>
+  <div class="quiz-feedback"></div>
+</div>
+
+<!-- ── 下一步 ── -->
+<h2>下一步</h2>
+
+<p>安裝 Docker Desktop 後，就可以實際跑這個專案了。下一堂課會帶你：</p>
+<ul style="padding-left:1.5rem; line-height:2">
+  <li>安裝 Docker Desktop</li>
+  <li>執行 <code>docker compose up --build</code></li>
+  <li>從 log 判斷三個服務是否健康</li>
+  <li>用 <code>curl</code> 驗證 <code>GET /health</code></li>
+</ul>
+
+<div class="callout tip">
+  <span class="callout-icon">💬</span>
+  <div>
+    有任何不清楚的地方，直接在 Claude Code 問我。
+    可以問「為什麼 COPY 要分兩次？」「volume 和 bind mount 差在哪？」
+    或任何讓你卡住的問題。
+  </div>
+</div>
+
+<p style="margin-top:1.5rem;">
+  <strong>推薦主要資源：</strong>
+  <a href="https://docs.docker.com/get-started/docker-overview/" target="_blank">Docker 官方文件 — Docker Overview</a>
+  （英文，但是最權威的第一手資料）
+</p>
+
+<footer>
+  Lesson 01 / cy-stock-dashboard Docker 學習路徑 &middot;
+  <a href="0002-install-and-first-run.html">下一課 →</a>
+</footer>
+
+<script src="../assets/quiz.js"></script>
+</body>
+</html>

@@ -1,0 +1,156 @@
+/* cy-stock-dashboard teaching workspace — shared lesson stylesheet */
+
+:root {
+  --bg: #0f172a;
+  --bg-card: #1e293b;
+  --bg-code: #0d1117;
+  --text: #e2e8f0;
+  --text-muted: #94a3b8;
+  --accent: #22c55e;
+  --accent-dim: #15803d;
+  --border: #334155;
+  --warn: #f59e0b;
+  --danger: #ef4444;
+  --radius: 8px;
+  --font-body: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { font-size: 16px; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  line-height: 1.7;
+  padding: 2rem 1rem;
+  max-width: 740px;
+  margin: 0 auto;
+}
+
+/* ── Typography ── */
+h1 { font-size: 1.75rem; font-weight: 700; color: var(--accent); margin-bottom: 0.25rem; }
+h2 { font-size: 1.2rem; font-weight: 600; color: var(--text); margin: 2rem 0 0.75rem; border-bottom: 1px solid var(--border); padding-bottom: 0.4rem; }
+h3 { font-size: 1rem; font-weight: 600; color: var(--accent); margin: 1.5rem 0 0.5rem; }
+p  { margin-bottom: 1rem; }
+a  { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { color: #fff; font-weight: 600; }
+
+/* ── Meta line under h1 ── */
+.lesson-meta { color: var(--text-muted); font-size: 0.8rem; margin-bottom: 2rem; }
+
+/* ── Code ── */
+code {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  background: var(--bg-code);
+  border: 1px solid var(--border);
+  padding: 0.1em 0.4em;
+  border-radius: 4px;
+  color: #93c5fd;
+}
+
+pre {
+  background: var(--bg-code);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+  overflow-x: auto;
+  margin: 1rem 0;
+}
+
+pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.875rem;
+  color: #e2e8f0;
+}
+
+/* comment style inside code blocks */
+.cm { color: #6b7280; font-style: italic; }
+
+/* ── Cards ── */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem 1.5rem;
+  margin: 1rem 0;
+}
+
+.card.accent  { border-left: 3px solid var(--accent); }
+.card.warn    { border-left: 3px solid var(--warn); }
+.card.danger  { border-left: 3px solid var(--danger); }
+
+/* ── Callout ── */
+.callout {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  padding: 0.9rem 1rem;
+  border-radius: var(--radius);
+  margin: 1.25rem 0;
+  font-size: 0.9rem;
+}
+.callout.tip    { background: #052e16; border: 1px solid var(--accent-dim); }
+.callout.note   { background: #1e3a5f; border: 1px solid #3b82f6; }
+.callout.warn   { background: #3f2a00; border: 1px solid var(--warn); }
+.callout-icon   { font-size: 1.1rem; flex-shrink: 0; margin-top: 0.1rem; }
+
+/* ── Quiz ── */
+.quiz { margin: 2rem 0; }
+.quiz-question { font-weight: 600; margin-bottom: 1rem; }
+
+.quiz-options { display: grid; gap: 0.5rem; }
+.quiz-options button {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.7rem 1rem;
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 150ms, background 150ms;
+}
+.quiz-options button:hover { border-color: var(--accent); background: #0f2a1a; }
+.quiz-options button.correct  { border-color: var(--accent); background: #052e16; color: var(--accent); }
+.quiz-options button.wrong    { border-color: var(--danger); background: #2c0a0a; color: #fca5a5; }
+.quiz-options button:disabled { cursor: default; }
+
+.quiz-feedback { margin-top: 0.75rem; font-size: 0.9rem; min-height: 1.4rem; }
+.quiz-feedback.correct { color: var(--accent); }
+.quiz-feedback.wrong   { color: #fca5a5; }
+
+/* ── Progress breadcrumb ── */
+.lesson-nav { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1.5rem; }
+.lesson-nav a { color: var(--text-muted); }
+
+/* ── Diagram helpers ── */
+.diagram {
+  background: var(--bg-code);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  line-height: 1.6;
+  white-space: pre;
+  overflow-x: auto;
+  margin: 1rem 0;
+  color: #cbd5e1;
+}
+
+/* ── Footer ── */
+footer {
+  margin-top: 3rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
