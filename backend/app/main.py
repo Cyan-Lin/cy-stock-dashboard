@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .db.migrate import run_migrations
+from .routers import prices, scrape
 
 
 @asynccontextmanager
@@ -24,6 +25,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+app.include_router(prices.router)
+app.include_router(scrape.router)
 
 
 @app.get("/health")
