@@ -4,13 +4,12 @@ T03 測試：POST /api/scrape
 切面：
   1. 有效 symbol + 日期範圍 → 200，upserted >= 0
   2. 不支援的 symbol → 422
-  3. yfinance 回傳空資料 → 200，upserted = 0
+  3. MoneyDJ 回傳空資料 → 200，upserted = 0
 """
 
 from datetime import date
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
-import pandas as pd
 import pytest
 from fastapi.testclient import TestClient
 
@@ -22,19 +21,24 @@ _TEST_SYMBOL = "TWII"
 _FROM = "2024-04-01"
 _TO = "2024-04-05"
 
-# 模擬 yfinance 回傳的 DataFrame（5 個交易日）
-def _mock_df():
-    idx = pd.to_datetime(["2024-04-01", "2024-04-02", "2024-04-03", "2024-04-04", "2024-04-05"])
-    return pd.DataFrame(
-        {
-            "Open":   [100.0, 103.0, 106.0, 105.0, 108.0],
-            "High":   [105.0, 107.0, 108.0, 109.0, 110.0],
-            "Low":    [99.0,  102.0, 104.0, 104.5, 107.0],
-            "Close":  [103.0, 106.0, 105.0, 108.0, 109.0],
-            "Volume": [1_000_000, 1_100_000, 900_000, 1_200_000, 800_000],
-        },
-        index=idx,
-    )
+# MoneyDJ 實際格式：5 個交易日
+_MOCK_BODY = (
+    "2024/04/01,2024/04/02,2024/04/03,2024/04/04,2024/04/05 "
+    "100.00,103.00,106.00,105.00,108.00 "   # group0: Open
+    "105.00,107.00,108.00,109.00,110.00 "   # group1: High
+    "99.00,102.00,104.00,104.50,107.00 "    # group2: Low
+    "103.00,106.00,105.00,108.00,109.00 "   # group3: Close
+    "1000000,1100000,900000,1200000,800000 " # group4: Volume
+    "0,0,0,0,0 0,0,0,0,0 0,0,0,0,0 0,0,0,0,0 0,0,0,0,0 0,0,0,0,0 0,0,0,0,0"
+)
+
+
+def _make_response(body: str, status_code: int = 200):
+    mock = MagicMock()
+    mock.status_code = status_code
+    mock.text = body
+    mock.raise_for_status = MagicMock()
+    return mock
 
 
 @pytest.fixture(autouse=True)
@@ -49,7 +53,7 @@ def cleanup(conn):
 # ---------------------------------------------------------------------------
 
 def test_scrape_success():
-    with patch("app.crawler.yfinance_crawler.yf.download", return_value=_mock_df()):
+    with patch("httpx.get", return_value=_make_response(_MOCK_BODY)):
         resp = client.post(
             "/api/scrape",
             json={"symbol": _TEST_SYMBOL, "from_date": _FROM, "to_date": _TO},
@@ -70,14 +74,14 @@ def test_scrape_invalid_symbol():
 
 
 # ---------------------------------------------------------------------------
-# 切面 3：yfinance 回傳空資料 → upserted = 0
+# 切面 3：MoneyDJ 回傳空資料 → upserted = 0
 # ---------------------------------------------------------------------------
 
 def test_scrape_empty_data():
-    with patch("app.crawler.yfinance_crawler.yf.download", return_value=pd.DataFrame()):
+    with patch("httpx.get", return_value=_make_response("2024/04/06")):
         resp = client.post(
             "/api/scrape",
-            json={"symbol": _TEST_SYMBOL, "from_date": _FROM, "to_date": _TO},
+            json={"symbol": _TEST_SYMBOL, "from_date": "2024-04-06", "to_date": "2024-04-06"},
         )
     assert resp.status_code == 200
     assert resp.json()["upserted"] == 0
