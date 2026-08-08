@@ -5,6 +5,8 @@ T03 測試：POST /api/scrape
   1. 有效 symbol + 日期範圍 → 200，upserted >= 0
   2. 不支援的 symbol → 422
   3. MoneyDJ 回傳空資料 → 200，upserted = 0
+  4. data_type=margin → 呼叫 pscnet 爬蟲，回傳 upserted >= 0
+  5. data_type 預設為 prices（不傳時走原 K 線路徑）
 """
 
 from datetime import date
@@ -85,3 +87,53 @@ def test_scrape_empty_data():
         )
     assert resp.status_code == 200
     assert resp.json()["upserted"] == 0
+
+
+# ---------------------------------------------------------------------------
+# 切面 4：data_type=margin → pscnet 爬蟲路徑
+# ---------------------------------------------------------------------------
+
+_MOCK_MARGIN_JSON = {
+    "ResultSet": {
+        "Result": [
+            {"V1": "2024/04/01", "V2": "9000000", "V3": "54000000", "V4": "200000", "V5": "12000", "V6": "180.00", "V7": "43000.0"},
+        ]
+    }
+}
+
+
+@pytest.fixture
+def cleanup_margin(conn):
+    yield
+    with conn.cursor() as cur:
+        cur.execute("DELETE FROM margin_data WHERE symbol = %s", (_TEST_SYMBOL,))
+
+
+def test_scrape_margin_data_type(cleanup_margin):
+    mock_resp = MagicMock()
+    mock_resp.raise_for_status = MagicMock()
+    mock_resp.json = MagicMock(return_value=_MOCK_MARGIN_JSON)
+
+    with patch("httpx.get", return_value=mock_resp):
+        resp = client.post(
+            "/api/scrape",
+            json={"symbol": _TEST_SYMBOL, "data_type": "margin", "from_date": "2024-04-01", "to_date": "2024-04-01"},
+        )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["data_type"] == "margin"
+    assert body["upserted"] == 1
+
+
+# ---------------------------------------------------------------------------
+# 切面 5：data_type 預設為 prices
+# ---------------------------------------------------------------------------
+
+def test_scrape_default_data_type_is_prices():
+    with patch("httpx.get", return_value=_make_response(_MOCK_BODY)):
+        resp = client.post(
+            "/api/scrape",
+            json={"symbol": _TEST_SYMBOL, "from_date": _FROM, "to_date": _TO},
+        )
+    assert resp.status_code == 200
+    assert resp.json()["data_type"] == "prices"
