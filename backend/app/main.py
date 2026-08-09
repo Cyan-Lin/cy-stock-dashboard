@@ -7,12 +7,15 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .db.migrate import run_migrations
 from .routers import margin, prices, scrape
+from .scheduler import shutdown_scheduler, start_scheduler
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     run_migrations()
+    start_scheduler()
     yield
+    shutdown_scheduler()
 
 
 app = FastAPI(title="cy-stock-dashboard API", lifespan=lifespan)

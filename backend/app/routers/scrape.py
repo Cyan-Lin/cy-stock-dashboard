@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 from app.crawler.moneydj_crawler import crawl as crawl_prices
 from app.crawler.pscnet_crawler import crawl as crawl_margin
+from app.scheduler import run_daily_crawl
 
 router = APIRouter(prefix="/api/scrape", tags=["scrape"])
 
@@ -35,6 +36,13 @@ _CRAWLERS = {
     DataType.prices: crawl_prices,
     DataType.margin: crawl_margin,
 }
+
+
+@router.post("/daily", status_code=200)
+def post_scrape_daily():
+    """手動觸發每日全量爬蟲，效果等同排程自動觸發。"""
+    run_daily_crawl()
+    return {"status": "triggered"}
 
 
 @router.post("", response_model=ScrapeResponse)
