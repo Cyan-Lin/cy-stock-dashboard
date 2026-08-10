@@ -4,6 +4,7 @@ import logging
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
+from app.alerts.store import evaluate_and_save
 from app.crawler.moneydj_crawler import crawl as crawl_prices
 from app.crawler.pscnet_crawler import crawl as crawl_margin
 
@@ -43,6 +44,13 @@ def run_daily_crawl() -> None:
         ]
         concurrent.futures.wait(futures)
     logger.info("[scheduler] daily crawl complete")
+
+    for symbol in ("TWII", "TPEx"):
+        try:
+            evaluate_and_save(symbol)
+            logger.info("[scheduler] %s alert evaluation complete", symbol)
+        except Exception as exc:
+            logger.error("[scheduler] %s alert evaluation ERROR – %s", symbol, exc)
 
 
 def start_scheduler() -> None:

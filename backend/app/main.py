@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .db.migrate import run_migrations
-from .routers import margin, prices, scrape
+from .routers import alerts, margin, prices, scrape
 from .scheduler import shutdown_scheduler, start_scheduler
 
 
@@ -33,6 +33,7 @@ app.add_middleware(
 app.include_router(prices.router)
 app.include_router(scrape.router)
 app.include_router(margin.router)
+app.include_router(alerts.router)
 
 
 @app.get("/health")

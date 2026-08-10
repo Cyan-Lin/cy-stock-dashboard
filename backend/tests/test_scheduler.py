@@ -145,3 +145,20 @@ def test_post_scrape_daily_returns_200():
         resp = client.post("/api/scrape/daily")
     assert resp.status_code == 200
     mock_crawl.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# 切面 9：run_daily_crawl 完成後呼叫所有 symbol 的 evaluate_and_save
+# ---------------------------------------------------------------------------
+
+def test_run_daily_crawl_calls_evaluate_and_save():
+    with (
+        patch("app.scheduler.crawl_prices", return_value=1),
+        patch("app.scheduler.crawl_margin", return_value=1),
+        patch("app.scheduler.evaluate_and_save") as mock_eval,
+    ):
+        run_daily_crawl()
+
+    called_symbols = {c.args[0] for c in mock_eval.call_args_list}
+    assert "TWII" in called_symbols
+    assert "TPEx" in called_symbols
