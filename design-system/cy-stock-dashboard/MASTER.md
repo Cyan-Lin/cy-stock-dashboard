@@ -30,7 +30,7 @@
 | Destructive | `#EF4444` | `--color-destructive` |
 | Ring | `#0F172A` | `--color-ring` |
 
-**Color Notes:** Dark bg + green positive indicators
+**Color Notes:** Dark bg. 漲跌方向採台股慣例：漲（正）用 `--color-destructive`（紅）、跌（負）用 `--color-accent`（綠）— 與一般「綠色代表正向」的直覺相反，適用於 K 線、量能柱、漲跌幅顯示等所有漲跌指示元件。
 
 ### Typography
 

@@ -40,7 +40,7 @@ export default function TopBar({
       </span>
       <span
         className="text-xs font-semibold"
-        style={{ color: isUp ? 'var(--color-accent)' : 'var(--color-destructive)' }}
+        style={{ color: isUp ? 'var(--color-destructive)' : 'var(--color-accent)' }}
       >
         {isUp ? '+' : ''}{change.toFixed(0)} ({isUp ? '+' : ''}{changePct.toFixed(2)}%)
       </span>

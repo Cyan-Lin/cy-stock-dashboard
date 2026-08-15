@@ -1,11 +1,11 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import TopBar from './components/TopBar'
 import DashboardChart from './components/DashboardChart'
+import { fetchPrices } from './api/prices'
 import {
-  getMockPriceBars,
   getMockMargin,
   getMockSecondPanel,
-  calc60MA,
+  type OHLCBar,
   type Symbol,
   type Timeframe,
 } from './data/mockData'
@@ -14,10 +14,32 @@ export default function App() {
   const [symbol, setSymbol] = useState<Symbol>('TWII')
   const [timeframe, setTimeframe] = useState<Timeframe>('D')
 
-  const priceBars = useMemo(() => getMockPriceBars(symbol, timeframe), [symbol, timeframe])
+  const [priceBars, setPriceBars] = useState<OHLCBar[]>([])
+  const [ma60, setMa60] = useState<(number | null)[]>([])
+  const [priceError, setPriceError] = useState<string | null>(null)
+
   const marginBars = useMemo(() => getMockMargin(symbol), [symbol])
   const secondBars = useMemo(() => getMockSecondPanel(symbol, timeframe), [symbol, timeframe])
-  const ma60 = useMemo(() => calc60MA(priceBars), [priceBars])
+
+  useEffect(() => {
+    let cancelled = false
+
+    fetchPrices(symbol, timeframe)
+      .then(({ bars, ma60 }) => {
+        if (cancelled) return
+        setPriceBars(bars)
+        setMa60(ma60)
+        setPriceError(null)
+      })
+      .catch((err: Error) => {
+        if (cancelled) return
+        setPriceError(err.message)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [symbol, timeframe])
 
   const lastBar = priceBars[priceBars.length - 1]
   const prevBar = priceBars[priceBars.length - 2]
@@ -46,13 +68,23 @@ export default function App() {
 
       {/* Single ECharts instance fills remaining height — no scrolling needed */}
       <div className="flex-1 min-h-0">
-        <DashboardChart
-          priceBars={priceBars}
-          marginBars={marginBars}
-          secondBars={secondBars}
-          ma60={ma60}
-          timeframe={timeframe}
-        />
+        {priceError ? (
+          <div className="flex items-center justify-center h-full text-sm" style={{ color: 'var(--color-destructive)' }}>
+            資料載入失敗：{priceError}
+          </div>
+        ) : priceBars.length === 0 ? (
+          <div className="flex items-center justify-center h-full text-sm" style={{ color: 'var(--color-border)' }}>
+            載入中…
+          </div>
+        ) : (
+          <DashboardChart
+            priceBars={priceBars}
+            marginBars={marginBars}
+            secondBars={secondBars}
+            ma60={ma60}
+            timeframe={timeframe}
+          />
+        )}
       </div>
     </div>
   )

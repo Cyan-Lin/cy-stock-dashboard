@@ -2,8 +2,8 @@ import ReactECharts from 'echarts-for-react'
 import type { EChartsOption } from 'echarts'
 import type { OHLCBar, MarginBar, SecondPanelBar, Timeframe } from '../data/mockData'
 
-const BULL_COLOR = '#26A69A'
-const BEAR_COLOR = '#EF5350'
+const BULL_COLOR = '#EF5350'
+const BEAR_COLOR = '#26A69A'
 const MA60_COLOR = '#F59E0B'
 const GRID_COLOR = '#1E293B'
 const AXIS_LABEL_COLOR = '#94A3B8'
@@ -87,16 +87,23 @@ export default function DashboardChart({
       textStyle: { color: '#F8FAFC', fontSize: 13 },
       formatter: (params: unknown) => {
         if (!Array.isArray(params) || !params.length) return ''
-        const p = params as Array<{ axisValue: string; seriesName: string; data: unknown }>
+        const p = params as Array<{ axisValue: string; seriesName: string; dataIndex: number }>
         const date = p[0].axisValue
         const candle = p.find(x => x.seriesName === 'K線')
-        if (!candle) return `<div style="font-size:13px;color:#94A3B8">${date}</div>`
-        const [o, c, l, h] = candle.data as number[]
+        const bar = candle && priceBars[candle.dataIndex]
+        if (!bar) return `<div style="font-size:13px;color:#94A3B8">${date}</div>`
+        const { open: o, high: h, low: l, close: c } = bar
         const color = c >= o ? BULL_COLOR : BEAR_COLOR
+        const prevClose = priceBars[candle.dataIndex - 1]?.close
+        const changePct = prevClose ? ((c - prevClose) / prevClose) * 100 : null
+        const changeLine = changePct !== null
+          ? `<div>漲跌幅 <span style="color:${color};font-weight:600">${changePct >= 0 ? '+' : ''}${changePct.toFixed(2)}%</span></div>`
+          : ''
         return `<div style="font-size:13px;line-height:1.8">
           <div style="color:#94A3B8;margin-bottom:2px">${date}</div>
           <div>開 <span style="color:${color}">${o.toLocaleString()}</span>　高 <span style="color:${color}">${h.toLocaleString()}</span></div>
           <div>低 <span style="color:${color}">${l.toLocaleString()}</span>　收 <span style="color:${color};font-weight:600">${c.toLocaleString()}</span></div>
+          ${changeLine}
         </div>`
       },
     },
@@ -207,7 +214,7 @@ export default function DashboardChart({
         name: '成交量', type: 'bar', xAxisIndex: 1, yAxisIndex: 1,
         data: priceBars.map(b => ({
           value: b.volume,
-          itemStyle: { color: b.close >= b.open ? 'rgba(38,166,154,0.5)' : 'rgba(239,83,80,0.5)' },
+          itemStyle: { color: b.close >= b.open ? 'rgba(239,83,80,0.5)' : 'rgba(38,166,154,0.5)' },
         })),
       },
       {

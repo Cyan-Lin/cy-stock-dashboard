@@ -105,12 +105,3 @@ export function getMockSecondPanel(symbol: Symbol, timeframe: Timeframe): Second
   const bars = getMockPriceBars(symbol, timeframe)
   return generateSecondPanel(bars.map(b => b.date), timeframe === 'M', symbol === 'TWII' ? 77 : 66)
 }
-
-// 60MA for weekly chart
-export function calc60MA(bars: OHLCBar[]): (number | null)[] {
-  return bars.map((_, i) => {
-    if (i < 59) return null
-    const slice = bars.slice(i - 59, i + 1)
-    return Math.round(slice.reduce((s, b) => s + b.close, 0) / 60)
-  })
-}
