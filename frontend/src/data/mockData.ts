@@ -14,9 +14,9 @@ export interface OHLCBar {
 
 export interface MarginBar {
   date: string
-  marginBalance: number   // 融資餘額（億）
-  marginRatio: number     // 融資維持率（%）
-  cleanupIndex: number    // 籌碼洗淨指標
+  marginBalance: number | null   // 融資餘額（億），來源資料缺當日則為 null
+  marginRatio: number | null     // 融資維持率（%），來源資料缺當日則為 null
+  cleanupIndex: number | null    // 籌碼洗淨指標（大盤未跌的區間無定義）
 }
 
 export interface SecondPanelBar {
@@ -61,20 +61,6 @@ function generateBars(count: number, basePrice: number, seed = 42): OHLCBar[] {
   return bars
 }
 
-function generateMargin(dates: string[], seed = 99): MarginBar[] {
-  const r = seedRand(seed)
-  let balance = 2200
-  return dates.map((date) => {
-    balance += (r() - 0.5) * 80
-    return {
-      date,
-      marginBalance: Math.max(800, Math.round(balance * 10) / 10),
-      marginRatio: Math.round((155 + (r() - 0.5) * 30) * 10) / 10,
-      cleanupIndex: Math.round((r() - 0.5) * 20 * 100) / 100,
-    }
-  })
-}
-
 function generateSecondPanel(dates: string[], includeKD: boolean, seed = 77): SecondPanelBar[] {
   const r = seedRand(seed)
   let k = 50
@@ -94,11 +80,6 @@ const tpexDailyBars = generateBars(300, 200, 22)
 
 export function getMockPriceBars(symbol: Symbol, _timeframe: Timeframe): OHLCBar[] {
   return symbol === 'TWII' ? twiiDailyBars : tpexDailyBars
-}
-
-export function getMockMargin(symbol: Symbol): MarginBar[] {
-  const bars = getMockPriceBars(symbol, 'D')
-  return generateMargin(bars.map(b => b.date), symbol === 'TWII' ? 99 : 88)
 }
 
 export function getMockSecondPanel(symbol: Symbol, timeframe: Timeframe): SecondPanelBar[] {

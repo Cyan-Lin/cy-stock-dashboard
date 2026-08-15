@@ -1,5 +1,6 @@
 """
 T04 測試：TWSE 融資券爬蟲 + /api/margin
+T10 測試：/api/margin interval 參數、億元/百分比換算、籌碼洗淨欄位
 
 切面：
   1. _parse() 欄位對應正確（V1~V7 → MarginRow）
@@ -9,6 +10,12 @@ T04 測試：TWSE 融資券爬蟲 + /api/margin
   5. GET /api/margin?symbol=TWII 回傳 200 + 正確欄位
   6. GET /api/margin 查無資料 → 404
   7. GET /api/margin from/to 篩選有效
+  8. GET /api/margin margin_amount_100m 由 margin_balance_amount 換算（÷100000）
+  9. GET /api/margin margin_maintenance_ratio 回傳百分比（非小數比率）
+  10. GET /api/margin chip_washout：window 內無值為 null
+  11. GET /api/margin chip_washout：日頻正確值（reuse evaluator.chip_washout）
+  12. GET /api/margin?interval=weekly 取該週最後交易日的值（含 chip_washout）
+  13. GET /api/margin?interval=monthly 取該月最後交易日的值（含 chip_washout）
 """
 
 from datetime import date, timedelta
@@ -20,6 +27,7 @@ from fastapi.testclient import TestClient
 
 from app.crawler import pscnet_crawler
 from app.crawler.pscnet_crawler import _parse, _upsert
+from app.crawler.twse import upsert_prices
 from app.main import app
 
 client = TestClient(app)
@@ -196,3 +204,104 @@ def test_crawl_count_based_on_lookback_from_today_not_window_width():
 
     sent_count = mock_get.call_args.kwargs["params"]["c"]
     assert sent_count >= 500
+
+
+# ---------------------------------------------------------------------------
+# T10：/api/margin interval 參數、億元/百分比換算、籌碼洗淨欄位
+#
+# 25 天日頻資料（2024-04-01 起，剛好從週一開始）：
+#   margin_balance_amount(t) = 100000 - 1000*t 千元  → margin_amount_100m(t) = 1 - 0.01*t 億元
+#   close(t)                 = 100 - 0.5*t
+#   margin_maintenance_ratio 固定 1.5000（小數比率）→ API 應回傳 150.0（百分比）
+#
+# chip_washout 只在 i >= window(20) 時有值：
+#   t=20（2024-04-21，週三所在的那個 week bucket 最後交易日）：
+#     margin_change = (80000-100000)/100000 = -0.2；price_change = (90-100)/100 = -0.1 → value = 2.0
+#   t=24（2024-04-25，月 bucket 最後交易日）：
+#     margin_change = (76000-96000)/96000 = -5/24；price_change = (88-98)/98 = -5/49 → value = 49/24 ≈ 2.041667
+# ---------------------------------------------------------------------------
+
+_CW_SYMBOL = "TEST_MARGIN_CW"
+
+
+def _chip_washout_rows():
+    margin_rows = []
+    price_rows = []
+    for t in range(25):
+        d = (date(2024, 4, 1) + timedelta(days=t)).isoformat()
+        margin_rows.append({
+            "symbol": _CW_SYMBOL,
+            "date": d,
+            "margin_balance": Decimal("9000000"),
+            "margin_balance_amount": Decimal(100000 - 1000 * t),
+            "short_balance": Decimal("200000"),
+            "short_balance_amount": Decimal("12000"),
+            "margin_maintenance_ratio": Decimal("1.5000"),
+            "margin_short_ratio": Decimal("45.0000"),
+        })
+        price_rows.append({
+            "symbol": _CW_SYMBOL,
+            "date": d,
+            "open": Decimal("100.00"),
+            "high": Decimal("100.00"),
+            "low": Decimal("100.00"),
+            "close": Decimal("100.0") - Decimal("0.5") * t,
+            "volume": 1_000_000,
+        })
+    return margin_rows, price_rows
+
+
+@pytest.fixture
+def chip_washout_data(conn):
+    margin_rows, price_rows = _chip_washout_rows()
+    _upsert(margin_rows)
+    upsert_prices(price_rows)
+    yield
+    with conn.cursor() as cur:
+        cur.execute("DELETE FROM margin_data WHERE symbol = %s", (_CW_SYMBOL,))
+        cur.execute("DELETE FROM daily_prices WHERE symbol = %s", (_CW_SYMBOL,))
+
+
+def test_get_margin_amount_100m_conversion(chip_washout_data):
+    resp = client.get("/api/margin", params={"symbol": _CW_SYMBOL, "limit": 25})
+    assert resp.status_code == 200
+    row = next(r for r in resp.json() if r["date"] == "2024-04-01")
+    assert row["margin_amount_100m"] == pytest.approx(1.0)  # 100000 千元 / 100000
+
+
+def test_get_margin_maintenance_ratio_is_percentage(chip_washout_data):
+    resp = client.get("/api/margin", params={"symbol": _CW_SYMBOL, "limit": 25})
+    data = resp.json()
+    assert data[0]["margin_maintenance_ratio"] == pytest.approx(150.0)
+
+
+def test_get_margin_chip_washout_null_before_window_fills(chip_washout_data):
+    resp = client.get("/api/margin", params={"symbol": _CW_SYMBOL, "limit": 25})
+    row = next(r for r in resp.json() if r["date"] == "2024-04-10")  # t=9 < window(20)
+    assert row["chip_washout"] is None
+
+
+def test_get_margin_chip_washout_daily_value(chip_washout_data):
+    resp = client.get("/api/margin", params={"symbol": _CW_SYMBOL, "limit": 25})
+    row = next(r for r in resp.json() if r["date"] == "2024-04-21")  # t=20
+    assert row["chip_washout"] == pytest.approx(2.0, abs=0.0001)
+
+
+def test_get_margin_weekly_uses_last_trading_day(chip_washout_data):
+    resp = client.get("/api/margin", params={"symbol": _CW_SYMBOL, "interval": "weekly", "limit": 10})
+    assert resp.status_code == 200
+    data = resp.json()
+    week = next(r for r in data if r["date"] == "2024-04-15")  # 週一開始，最後交易日是 2024-04-21 (t=20)
+    assert week["chip_washout"] == pytest.approx(2.0, abs=0.0001)
+    assert week["margin_amount_100m"] == pytest.approx(0.8)  # t=20 → 1 - 0.01*20
+
+
+def test_get_margin_monthly_uses_last_trading_day(chip_washout_data):
+    resp = client.get("/api/margin", params={"symbol": _CW_SYMBOL, "interval": "monthly", "limit": 5})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data) == 1
+    month = data[0]
+    assert month["date"] == "2024-04-01"
+    assert month["chip_washout"] == pytest.approx(49 / 24, abs=0.0001)  # 最後交易日 2024-04-25 (t=24)
+    assert month["margin_amount_100m"] == pytest.approx(0.76)  # t=24 → 1 - 0.01*24

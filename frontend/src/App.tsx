@@ -2,9 +2,10 @@ import { useState, useMemo, useEffect } from 'react'
 import TopBar from './components/TopBar'
 import DashboardChart from './components/DashboardChart'
 import { fetchPrices } from './api/prices'
+import { fetchMargin } from './api/margin'
 import {
-  getMockMargin,
   getMockSecondPanel,
+  type MarginBar,
   type OHLCBar,
   type Symbol,
   type Timeframe,
@@ -17,8 +18,8 @@ export default function App() {
   const [priceBars, setPriceBars] = useState<OHLCBar[]>([])
   const [ma60, setMa60] = useState<(number | null)[]>([])
   const [priceError, setPriceError] = useState<string | null>(null)
+  const [marginBars, setMarginBars] = useState<MarginBar[]>([])
 
-  const marginBars = useMemo(() => getMockMargin(symbol), [symbol])
   const secondBars = useMemo(() => getMockSecondPanel(symbol, timeframe), [symbol, timeframe])
 
   useEffect(() => {
@@ -34,6 +35,24 @@ export default function App() {
       .catch((err: Error) => {
         if (cancelled) return
         setPriceError(err.message)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [symbol, timeframe])
+
+  useEffect(() => {
+    let cancelled = false
+
+    fetchMargin(symbol, timeframe)
+      .then((bars) => {
+        if (cancelled) return
+        setMarginBars(bars)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setMarginBars([])
       })
 
     return () => {

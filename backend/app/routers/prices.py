@@ -1,5 +1,4 @@
 from datetime import date
-from enum import Enum
 from typing import Optional
 
 import psycopg2.extras
@@ -7,14 +6,9 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from app.db.connection import db_conn
+from app.interval import Interval
 
 router = APIRouter(prefix="/api/prices", tags=["prices"])
-
-
-class Interval(str, Enum):
-    daily = "daily"
-    weekly = "weekly"
-    monthly = "monthly"
 
 
 class PriceBar(BaseModel):

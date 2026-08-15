@@ -39,7 +39,7 @@
 | 層級 | 技術 | 說明 |
 |---|---|---|
 | 前端框架 | React + TypeScript | 有使用經驗，學習成本低 |
-| 圖表庫 | ECharts | 內建 `connect()` 多圖十字線聯動 |
+| 圖表庫 | ECharts | 單一 instance 多 grid + `axisPointer.link` 做十字線聯動（見 ADR-0001，`connect()` 已驗證不可行）|
 | 樣式 | Tailwind CSS | RWD 手機優化方便 |
 | UI 設計輔助 | `/ui-ux-pro-max:ui-ux-pro-max` | 設計階段使用 |
 | 後端框架 | FastAPI（Python） | 業界新專案主流 |

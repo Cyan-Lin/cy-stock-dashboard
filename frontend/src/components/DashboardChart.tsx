@@ -28,6 +28,20 @@ interface DashboardChartProps {
   timeframe: Timeframe
 }
 
+// marginBars/secondBars 來自獨立資料源，起始日期與筆數都可能跟 priceBars 不同，
+// 不能用陣列 index 對位——一律用日期查找，缺當天資料就回 null（斷線）。
+function alignByDate<Bar extends { date: string }, Value>(
+  dates: string[],
+  bars: Bar[],
+  select: (bar: Bar) => Value,
+): (Value | null)[] {
+  const byDate = new Map(bars.map((b) => [b.date, b]))
+  return dates.map((d) => {
+    const bar = byDate.get(d)
+    return bar ? select(bar) : null
+  })
+}
+
 // Grid layout (% of chart height):
 //  0 Price candles : top=24       → bottom=47%
 //  1 Volume strip  : top=54%      → bottom=40%
@@ -219,13 +233,13 @@ export default function DashboardChart({
       },
       {
         name: '融資餘額', type: 'bar', xAxisIndex: 2, yAxisIndex: 2,
-        data: marginBars.map(b => b.marginBalance),
+        data: alignByDate(dates, marginBars, b => b.marginBalance),
         itemStyle: { color: 'rgba(56,189,248,0.4)', borderColor: BALANCE_COLOR, borderWidth: 1 },
         barMaxWidth: 6,
       },
       {
         name: '融資維持率', type: 'line', xAxisIndex: 2, yAxisIndex: 3,
-        data: marginBars.map(b => b.marginRatio), smooth: true, symbol: 'none',
+        data: alignByDate(dates, marginBars, b => b.marginRatio), smooth: true, symbol: 'none',
         lineStyle: { color: MARGIN_RATIO_COLOR, width: 1.5 },
         markLine: {
           silent: true, symbol: 'none',
@@ -235,19 +249,19 @@ export default function DashboardChart({
       },
       {
         name: '籌碼洗淨', type: 'line', xAxisIndex: 2, yAxisIndex: 3,
-        data: marginBars.map(b => b.cleanupIndex), smooth: true, symbol: 'none',
+        data: alignByDate(dates, marginBars, b => b.cleanupIndex), smooth: true, symbol: 'none',
         lineStyle: { color: CLEANUP_COLOR, width: 1 },
       },
       {
         name: '資券比', type: 'bar', xAxisIndex: 3, yAxisIndex: 4,
-        data: secondBars.map(b => b.shortLongRatio),
+        data: alignByDate(dates, secondBars, b => b.shortLongRatio),
         itemStyle: { color: 'rgba(34,197,94,0.35)', borderColor: RATIO_COLOR, borderWidth: 1 },
         barMaxWidth: 6,
       },
       ...(isMonthly ? [
         {
           name: 'K值', type: 'line' as const, xAxisIndex: 3, yAxisIndex: 5,
-          data: secondBars.map(b => b.kValue ?? null), smooth: true, symbol: 'none',
+          data: alignByDate(dates, secondBars, b => b.kValue ?? null), smooth: true, symbol: 'none',
           lineStyle: { color: K_COLOR, width: 1.5 },
           markLine: {
             silent: true, symbol: 'none',
@@ -260,7 +274,7 @@ export default function DashboardChart({
         },
         {
           name: 'D值', type: 'line' as const, xAxisIndex: 3, yAxisIndex: 5,
-          data: secondBars.map(b => b.dValue ?? null), smooth: true, symbol: 'none',
+          data: alignByDate(dates, secondBars, b => b.dValue ?? null), smooth: true, symbol: 'none',
           lineStyle: { color: D_COLOR, width: 1.5 },
         },
       ] : []),
