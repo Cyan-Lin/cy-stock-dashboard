@@ -40,6 +40,13 @@ _CODE_MAP = {
 _BASE_URL = "https://www.moneydj.com/Z/ZB/ZBH/CZKC0.djbcd"
 _HEADERS = {"Referer": "https://www.moneydj.com/"}
 
+# MoneyDJ 沒有「結束日期」參數：永遠是從今天往回抓 C 筆交易日，
+# to_date 只用來事後篩選，不影響請求成本。回溯深度（today - from_date）
+# 才是決定 C 大小、進而決定耗時的因素。超過此深度直接拒絕，避免單次
+# 請求過大導致逾時。實測 MoneyDJ 資料最早：EB09999(TWII) 1987/01/06、
+# EB18888(TPEx) 1996/01/17，14466 天涵蓋兩者並留一點緩衝。
+_MAX_LOOKBACK_DAYS = 15_000
+
 
 def crawl(
     symbol: str,
@@ -60,15 +67,20 @@ def crawl(
     start = from_date or today
     end = to_date or today
 
-    # 向上取整日曆天數 × 1.5 以涵蓋非交易日，最少 1 筆
-    calendar_days = (end - start).days + 1
-    count = max(1, int(calendar_days * 1.5) + 5)
+    # calendar days ≥ 交易日數，直接拿來當 C 已經足夠涵蓋 [start, today]
+    lookback_days = (today - start).days + 1
+    if lookback_days > _MAX_LOOKBACK_DAYS:
+        raise ValueError(
+            f"from_date too far in the past ({lookback_days} calendar days from today, "
+            f"max {_MAX_LOOKBACK_DAYS}); MoneyDJ history is limited, split into smaller requests"
+        )
+    count = max(1, lookback_days + 5)
 
     resp = httpx.get(
         _BASE_URL,
         params={"A": code, "B": "D", "C": count, "ver": "5"},
         headers=_HEADERS,
-        timeout=30,
+        timeout=90,
     )
     resp.raise_for_status()
 

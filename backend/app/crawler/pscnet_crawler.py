@@ -19,7 +19,7 @@ pscnet 爬蟲，負責抓取融資券日線資料。
 """
 
 from datetime import date
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Optional, TypedDict
 
 import httpx
@@ -52,6 +52,12 @@ _SYMBOL_MAP: dict[str, tuple[str, str]] = {
 
 _HEADERS = {"Referer": "https://www.pscnet.com.tw/"}
 
+# pscnet 同樣沒有「結束日期」參數：永遠是從今天往回抓 c 筆交易日，
+# to_date 只用來事後篩選 upsert 範圍，不影響請求成本。回溯深度
+# （today - from_date）才是決定 c 大小、進而決定耗時的因素。實測資料
+# 最早：TWII 1999/05/19、TPEx 1999/04/01，9998 天涵蓋兩者並留緩衝。
+_MAX_LOOKBACK_DAYS = 10_500
+
 
 def crawl(
     symbol: str,
@@ -73,8 +79,14 @@ def crawl(
     start = from_date or today
     end = to_date or today
 
-    calendar_days = (end - start).days + 1
-    count = max(1, int(calendar_days * 1.5) + 5)
+    # calendar days ≥ 交易日數，直接拿來當 c 已經足夠涵蓋 [start, today]
+    lookback_days = (today - start).days + 1
+    if lookback_days > _MAX_LOOKBACK_DAYS:
+        raise ValueError(
+            f"from_date too far in the past ({lookback_days} calendar days from today, "
+            f"max {_MAX_LOOKBACK_DAYS}); pscnet history is limited, split into smaller requests"
+        )
+    count = max(1, lookback_days + 5)
 
     resp = httpx.get(
         url,
@@ -106,8 +118,18 @@ def _parse(
         if not (start <= dt <= end):
             continue
 
-        margin_balance = Decimal(item["V2"])
-        short_balance = Decimal(item["V4"])
+        # 早期資料（如 2003 年附近）V6 等欄位常是空字串，Decimal("") 會拋
+        # InvalidOperation；缺這些欄位的日期就跳過，不讓整批因單筆壞資料失敗。
+        try:
+            margin_balance = Decimal(item["V2"])
+            short_balance = Decimal(item["V4"])
+            margin_balance_amount = Decimal(item["V3"])
+            short_balance_amount = Decimal(item["V5"])
+            margin_maintenance_ratio = (Decimal(item["V6"]) / 100).quantize(
+                Decimal("0.0001"), rounding=ROUND_HALF_UP
+            )
+        except (InvalidOperation, KeyError):
+            continue
 
         ratio = (
             (margin_balance / short_balance).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
@@ -119,12 +141,10 @@ def _parse(
             symbol=symbol,
             date=dt.isoformat(),
             margin_balance=margin_balance,
-            margin_balance_amount=Decimal(item["V3"]),
+            margin_balance_amount=margin_balance_amount,
             short_balance=short_balance,
-            short_balance_amount=Decimal(item["V5"]),
-            margin_maintenance_ratio=(Decimal(item["V6"]) / 100).quantize(
-                Decimal("0.0001"), rounding=ROUND_HALF_UP
-            ),
+            short_balance_amount=short_balance_amount,
+            margin_maintenance_ratio=margin_maintenance_ratio,
             margin_short_ratio=ratio,
         ))
 

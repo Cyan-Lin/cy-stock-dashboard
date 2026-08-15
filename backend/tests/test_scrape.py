@@ -15,13 +15,21 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
+from app.crawler import moneydj_crawler, pscnet_crawler
 from app.main import app
 
 client = TestClient(app)
 
-_TEST_SYMBOL = "TWII"
+# 用假 symbol 測試，避免污染真的 TWII/TPEx 資料（dev DB 跟測試共用）
+_TEST_SYMBOL = "TEST_SCRAPE"
 _FROM = "2024-04-01"
 _TO = "2024-04-05"
+
+
+@pytest.fixture(autouse=True)
+def _fake_symbol(monkeypatch):
+    monkeypatch.setitem(moneydj_crawler._CODE_MAP, _TEST_SYMBOL, "TEST_CODE")
+    monkeypatch.setitem(pscnet_crawler._SYMBOL_MAP, _TEST_SYMBOL, ("TEST_CODE", "https://example.invalid/test"))
 
 # MoneyDJ 實際格式：5 個交易日
 _MOCK_BODY = (

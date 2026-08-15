@@ -26,7 +26,7 @@ export async function fetchPrices(symbol: Symbol, timeframe: Timeframe): Promise
   const params = new URLSearchParams({
     symbol,
     interval: INTERVAL_MAP[timeframe],
-    limit: '8000',
+    limit: '20000',
   })
   const res = await fetch(`/api/prices?${params}`)
 

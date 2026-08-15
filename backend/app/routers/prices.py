@@ -137,7 +137,7 @@ def get_prices(
     interval: Interval = Query(Interval.daily, description="daily / weekly / monthly"),
     from_date: Optional[date] = Query(None, alias="from", description="起始日期（含），ISO 格式"),
     to_date: Optional[date] = Query(None, alias="to", description="結束日期（含），ISO 格式"),
-    limit: int = Query(500, ge=1, le=8000, description="最多回傳筆數"),
+    limit: int = Query(500, ge=1, le=20000, description="最多回傳筆數"),
 ):
     params: dict = {"symbol": symbol, "limit": limit}
     date_filter = _build_date_filter(params, from_date, to_date)

@@ -11,18 +11,27 @@ T04 測試：TWSE 融資券爬蟲 + /api/margin
   7. GET /api/margin from/to 篩選有效
 """
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
+from app.crawler import pscnet_crawler
 from app.crawler.pscnet_crawler import _parse, _upsert
 from app.main import app
 
 client = TestClient(app)
 
 _TEST_SYMBOL = "TEST_MARGIN"
+
+
+@pytest.fixture(autouse=True)
+def _fake_symbol(monkeypatch):
+    monkeypatch.setitem(
+        pscnet_crawler._SYMBOL_MAP, _TEST_SYMBOL, ("TEST_CODE", "https://example.invalid/test")
+    )
 
 _MOCK_RESULT = [
     {"V1": "2024/04/03", "V2": "9000000", "V3": "54000000", "V4": "200000", "V5": "12000", "V6": "180.00", "V7": "43000.0"},
@@ -147,3 +156,43 @@ def test_get_margin_from_to_filter(conn):
     data = resp.json()
     assert len(data) == 1
     assert data[0]["date"] == "2024-04-02"
+
+
+def _make_margin_response(result: list[dict]):
+    mock = MagicMock()
+    mock.raise_for_status = MagicMock()
+    mock.json = MagicMock(return_value={"ResultSet": {"Result": result}})
+    return mock
+
+
+# ---------------------------------------------------------------------------
+# 切面 8：crawl() from_date 回溯過深（today - from_date 超過上限）→ ValueError，不呼叫 httpx
+# ---------------------------------------------------------------------------
+
+def test_crawl_rejects_lookback_beyond_max():
+    from app.crawler.pscnet_crawler import _MAX_LOOKBACK_DAYS, crawl
+
+    too_old = date.today() - timedelta(days=_MAX_LOOKBACK_DAYS + 1)
+
+    with patch("httpx.get") as mock_get:
+        with pytest.raises(ValueError, match="too far in the past"):
+            crawl(_TEST_SYMBOL, from_date=too_old)
+
+    mock_get.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# 切面 9：crawl() count 依「今天 - from_date」計算，不受 to_date 影響
+# ---------------------------------------------------------------------------
+
+def test_crawl_count_based_on_lookback_from_today_not_window_width():
+    from app.crawler.pscnet_crawler import crawl
+
+    old_from = date.today() - timedelta(days=500)
+    old_to = old_from + timedelta(days=3)  # 區間很窄，但離今天很遠
+
+    with patch("httpx.get", return_value=_make_margin_response([])) as mock_get:
+        crawl(_TEST_SYMBOL, from_date=old_from, to_date=old_to)
+
+    sent_count = mock_get.call_args.kwargs["params"]["c"]
+    assert sent_count >= 500
